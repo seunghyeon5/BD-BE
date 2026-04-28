@@ -1,6 +1,5 @@
 package com.example.demo.entity;
 
-import com.example.demo.dto.BoardDto;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -30,18 +29,25 @@ public class BoardEntity extends BaseTimeEntity{
     @Column
     private int boardHits;
 
-    public static BoardEntity toSaveEntity(BoardDto boardDto) {
+    // 게시글 최초 등록 시 사용하는 생성 메서드
+    public static BoardEntity create(String boardWriter, String boardPass, String boardTitle, String boardContents) {
         BoardEntity boardEntity = new BoardEntity();
-        boardEntity.boardWriter = boardDto.getBoardWriter();
-        boardEntity.boardPass = boardDto.getBoardPass();
-        boardEntity.boardTitle = boardDto.getBoardTitle();
-        boardEntity.boardContents = boardDto.getBoardContents();
+        boardEntity.boardWriter = boardWriter;
+        boardEntity.boardPass = boardPass;
+        boardEntity.boardTitle = boardTitle;
+        boardEntity.boardContents = boardContents;
         boardEntity.boardHits = 0;
         return boardEntity;
     }
 
-    public void update(BoardDto boardDto) {
-        this.boardTitle = boardDto.getBoardTitle();
-        this.boardContents = boardDto.getBoardContents();
+    // 수정 허용 항목만 변경
+    public void update(String boardTitle, String boardContents) {
+        this.boardTitle = boardTitle;
+        this.boardContents = boardContents;
+    }
+
+    // 상세 조회 시 조회수 증가
+    public void increaseHits() {
+        this.boardHits += 1;
     }
 }

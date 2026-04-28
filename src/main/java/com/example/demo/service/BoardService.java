@@ -1,62 +1,68 @@
 package com.example.demo.service;
 
-import com.example.demo.dto.BoardDto;
+import com.example.demo.dto.BoardCreateRequest;
+import com.example.demo.dto.BoardResponse;
+import com.example.demo.dto.BoardUpdateRequest;
 import com.example.demo.entity.BoardEntity;
+import com.example.demo.exception.BoardNotFoundException;
+import com.example.demo.exception.InvalidBoardPasswordException;
 import com.example.demo.repository.BoardRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
 public class BoardService {
     private final BoardRepository boardRepository;
 
-    public void save(BoardDto boardDto) {
-        BoardEntity boardEntity = BoardEntity.toSaveEntity(boardDto);
-        boardRepository.save(boardEntity);
+    // 요청값을 엔티티로 바꿔 저장한 뒤 응답 DTO로 반환
+    public BoardResponse save(BoardCreateRequest request) {
+        BoardEntity boardEntity = BoardEntity.create(
+                request.getBoardWriter(),
+                request.getBoardPass(),
+                request.getBoardTitle(),
+                request.getBoardContents()
+        );
+        return BoardResponse.from(boardRepository.save(boardEntity));
     }
 
-    public List<BoardDto> findAll() {
-        List<BoardEntity> boardEntityList = boardRepository.findAll();
-        List<BoardDto> boardDtoList = new ArrayList<>();
-        for (BoardEntity boardEntity : boardEntityList) {
-            boardDtoList.add(BoardDto.toBoardDTO(boardEntity));
-        }
-        return boardDtoList;
+    public List<BoardResponse> findAll() {
+        return boardRepository.findAllByOrderByIdDesc().stream()
+                .map(BoardResponse::from)
+                .toList();
     }
 
     @Transactional
-    public void updateHits(Long id) {
-        boardRepository.updateHits(id);
-    }
-
-    public BoardDto findById(Long id) {
-        Optional<BoardEntity> optionalBoardEntity = boardRepository.findById(id);
-        if (optionalBoardEntity.isPresent()) {
-            BoardEntity boardEntity = optionalBoardEntity.get();
-            return BoardDto.toBoardDTO(boardEntity);
-        } else {
-            return null;
+    // 상세 조회 시 필요하면 조회수를 함께 증가
+    public BoardResponse findById(Long id, boolean increaseHits) {
+        BoardEntity boardEntity = boardRepository.findById(id)
+                .orElseThrow(() -> new BoardNotFoundException(id));
+        if (increaseHits) {
+            boardEntity.increaseHits();
         }
+        return BoardResponse.from(boardEntity);
     }
 
     public void delete(long id) {
+        if (!boardRepository.existsById(id)) {
+            throw new BoardNotFoundException(id);
+        }
         boardRepository.deleteById(id);
     }
 
     @Transactional
-    public void update(BoardDto boardDto) {
-        BoardEntity boardEntity = boardRepository.findById(boardDto.getId()).orElseThrow(() ->
-                    new IllegalArgumentException("해당 게시글을 찾을 수 없습니다."));
-        if (boardEntity.getBoardPass().equals(boardDto.getUpdatePass())) {
-            boardEntity.update(boardDto);
+    // 저장된 비밀번호와 비교한 뒤 제목/내용만 수정
+    public BoardResponse update(Long id, BoardUpdateRequest request) {
+        BoardEntity boardEntity = boardRepository.findById(id)
+                .orElseThrow(() -> new BoardNotFoundException(id));
+        if (boardEntity.getBoardPass().equals(request.getBoardPass())) {
+            boardEntity.update(request.getBoardTitle(), request.getBoardContents());
+            return BoardResponse.from(boardEntity);
         } else {
-            throw new IllegalArgumentException("비밀번호가 일치하지 않습니다.");
+            throw new InvalidBoardPasswordException();
         }
     }
 }
