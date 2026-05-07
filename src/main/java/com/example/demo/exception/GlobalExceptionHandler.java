@@ -12,6 +12,14 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(ApiException.class)
+    public ResponseEntity<ErrorResponse> handleApiException(
+            ApiException exception,
+            HttpServletRequest request
+    ) {
+        return buildErrorResponse(exception.getStatus(), exception.getMessage(), request.getRequestURI());
+    }
+
     // 존재하지 않는 게시글 조회/수정/삭제 요청 처리
     @ExceptionHandler(BoardNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleBoardNotFound(
