@@ -37,8 +37,8 @@ public class UserController {
     }
 
     // 마이페이지에서 사용할 내 정보 조회 API
-    @GetMapping("/{userId}/me")
-    public ResponseEntity<UserResponse> myPage(@PathVariable Long userId) {
-        return ResponseEntity.ok(userService.findMyPage(userId));
+    @GetMapping("/{id}/me")
+    public ResponseEntity<UserResponse> myPage(@PathVariable Long id) {
+        return ResponseEntity.ok(userService.findMyPage(id));
     }
 }

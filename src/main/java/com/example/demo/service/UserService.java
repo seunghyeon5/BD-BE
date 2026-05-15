@@ -45,13 +45,13 @@ public class UserService {
     }
 
     // 마이페이지 응답에 필요한 사용자 정보를 조회
-    public UserResponse findMyPage(Long userId) {
-        return UserResponse.from(findUser(userId));
+    public UserResponse findMyPage(Long id) {
+        return UserResponse.from(findUser(id));
     }
 
     // 다른 서비스에서도 재사용할 수 있는 사용자 조회 공통 메서드
-    public UserEntity findUser(Long userId) {
-        return userRepository.findById(userId)
+    public UserEntity findUser(Long id) {
+        return userRepository.findById(id)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "존재하지 않는 사용자입니다."));
     }
 }
