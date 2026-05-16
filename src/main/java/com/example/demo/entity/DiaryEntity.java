@@ -41,10 +41,10 @@ public class DiaryEntity extends BaseTimeEntity {
     private String mood;
 
     // 일기 등록 시 DiaryEntity를 만들기 위한 생성 메서드
-    public static DiaryEntity create(UserEntity user, LocalDate diaryDate, String title, String content, String mood) {
+    public static DiaryEntity create(UserEntity user, LocalDate diaryDate ,String title, String content, String mood) {
         DiaryEntity diary = new DiaryEntity();
         diary.user = user;
-        diary.diaryDate = diaryDate;
+        diary.diaryDate = (diaryDate != null) ? diaryDate : LocalDate.now();;
         diary.title = title;
         diary.content = content;
         diary.mood = mood;
