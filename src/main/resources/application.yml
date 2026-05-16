@@ -2,13 +2,16 @@ server:
   port: 8080
 
 spring:
+  config:
+    # .env는 확장자가 없으므로 [.properties]를 붙여야 스프링이 .env를 파싱하여 정상적으로 읽을 수 있음
+    import: optional:file:.env[.properties]
   application:
     name: demo
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/db_codingrecipe?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
-    username: user_codingrecipe
-    password: 1234
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
 
   jpa:
     open-in-view: false
@@ -16,3 +19,7 @@ spring:
     hibernate:
       ddl-auto: update
       format_sql: true
+
+# .env의 JWT_SECRET_KEY를 참조
+  jwt:
+    secret: ${JWT_SECRET_KEY}
