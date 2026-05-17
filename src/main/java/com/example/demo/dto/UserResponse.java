@@ -13,6 +13,7 @@ public class UserResponse {
     private String email;
     private String nickname;
     private LocalDateTime createdAt;
+    private String delYn;
 
     public static UserResponse from(UserEntity user) {
         return UserResponse.builder()
@@ -20,6 +21,7 @@ public class UserResponse {
                 .email(user.getEmail())
                 .nickname(user.getNickname())
                 .createdAt(user.getCreatedAt())
+                .delYn(user.getDelYn())
                 .build();
     }
 }

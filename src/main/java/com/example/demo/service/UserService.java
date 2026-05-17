@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -34,6 +35,9 @@ public class UserService {
 
     // 입력받은 이메일과 비밀번호가 저장된 사용자 정보와 일치하는지 확인
     public UserResponse login(UserLoginRequest request) {
+
+        System.out.println("test");
+
         UserEntity user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다."));
 
@@ -53,5 +57,22 @@ public class UserService {
     public UserEntity findUser(Long id) {
         return userRepository.findById(id)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "존재하지 않는 사용자입니다."));
+    }
+
+    // 사용자 탈퇴 메서드
+    @Transactional
+    public UserResponse withdrawUser(Long id) {
+
+        UserEntity user = userRepository.findById(id)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "존재하지 않는 사용자입니다."));
+
+        // 이미 탈퇴한 유저인지 확인
+        if ("Y".equals(user.getDelYn())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "이미 탈퇴한 사용자입니다.");
+        }
+
+        user.withdraw();
+
+        return UserResponse.from(user);
     }
 }

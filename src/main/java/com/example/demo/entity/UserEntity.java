@@ -24,12 +24,21 @@ public class UserEntity extends BaseTimeEntity {
     @Column(nullable = false, length = 30)
     private String nickname;
 
+    @Column(nullable = false)
+    private String delYn;
+
     // 회원가입 시 UserEntity를 만들기 위한 생성 메서드
     public static UserEntity create(String email, String password, String nickname) {
         UserEntity user = new UserEntity();
         user.email = email;
         user.password = password;
         user.nickname = nickname;
+        user.delYn = "N";
         return user;
+    }
+
+    // 회원탈퇴 메서드
+    public void withdraw() {
+        this.delYn = "Y";
     }
 }

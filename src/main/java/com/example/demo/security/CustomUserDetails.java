@@ -20,6 +20,9 @@ public class CustomUserDetails implements UserDetails {
         return Collections.singletonList(new SimpleGrantedAuthority(DEFAULT_ROLE));
     }
 
+    //회원 아이디를 가져온다.
+    public Long getUserId() {return user.getId();}
+
     // DB에 저장된 암호화 비밀번호를 Spring Security 인증에 사용하도록 반환한다.
     @Override
     public String getPassword() {
