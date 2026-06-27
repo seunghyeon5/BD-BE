@@ -17,4 +17,10 @@ public class UserSignupRequest {
 
     @NotBlank
     private String nickname;
+
+    @NotBlank
+    private String gender;
+
+    @NotBlank
+    private String phoneNum;
 }

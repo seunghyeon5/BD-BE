@@ -1,6 +1,7 @@
 package com.example.demo.entity;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -21,19 +22,27 @@ public class UserEntity extends BaseTimeEntity {
     @Column(nullable = false)
     private String password;
 
-    @Column(nullable = false, length = 30)
+    @Column(nullable = false, length = 30, unique = true)
     private String nickname;
 
     @Column(nullable = false)
     private String delYn;
 
+    @Column(nullable = false, length = 30)
+    private String gender;
+
+    @Column(nullable = false, length = 11)
+    private String phoneNum;
+
     // 회원가입 시 UserEntity를 만들기 위한 생성 메서드
-    public static UserEntity create(String email, String password, String nickname) {
+    public static UserEntity create(String email, String password, String nickname, String gender, String phoneNum) {
         UserEntity user = new UserEntity();
         user.email = email;
         user.password = password;
         user.nickname = nickname;
         user.delYn = "N";
+        user.gender = gender;
+        user.phoneNum = phoneNum;
         return user;
     }
 

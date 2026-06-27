@@ -27,7 +27,9 @@ public class UserService {
         UserEntity user = UserEntity.create(
                 request.getEmail(),
                 passwordEncoder.encode(request.getPassword()),
-                request.getNickname()
+                request.getNickname(),
+                request.getGender(),
+                request.getPhoneNum()
         );
 
         return UserResponse.from(userRepository.save(user));

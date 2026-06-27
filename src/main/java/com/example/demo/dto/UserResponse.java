@@ -14,6 +14,8 @@ public class UserResponse {
     private String nickname;
     private LocalDateTime createdAt;
     private String delYn;
+    private String gender;
+    private String phoneNum;
 
     public static UserResponse from(UserEntity user) {
         return UserResponse.builder()
@@ -22,6 +24,8 @@ public class UserResponse {
                 .nickname(user.getNickname())
                 .createdAt(user.getCreatedAt())
                 .delYn(user.getDelYn())
+                .gender(user.getGender())
+                .phoneNum(user.getPhoneNum())
                 .build();
     }
 }
