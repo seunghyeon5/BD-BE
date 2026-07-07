@@ -1,10 +1,12 @@
 package com.example.demo.service;
 
+import com.example.demo.dto.LoginResponse;
 import com.example.demo.dto.UserLoginRequest;
 import com.example.demo.dto.UserResponse;
 import com.example.demo.dto.UserSignupRequest;
 import com.example.demo.entity.UserEntity;
 import com.example.demo.exception.ApiException;
+import com.example.demo.jwt.JWTUtil;
 import com.example.demo.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JWTUtil jWTUtil;
 
     // 이메일 중복을 확인한 뒤 새 사용자를 저장
     public UserResponse signup(UserSignupRequest request) {
@@ -36,10 +39,7 @@ public class UserService {
     }
 
     // 입력받은 이메일과 비밀번호가 저장된 사용자 정보와 일치하는지 확인
-    public UserResponse login(UserLoginRequest request) {
-
-        System.out.println("test");
-
+    public LoginResponse login(UserLoginRequest request) {
         UserEntity user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다."));
 
@@ -47,7 +47,14 @@ public class UserService {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다.");
         }
 
-        return UserResponse.from(user);
+        String role = "ROLE_USER";
+        String token = jWTUtil.createJwt(
+                user.getEmail(),
+                role,
+                60 * 60 * 1000L
+        );
+
+        return LoginResponse.of(token, user);
     }
 
     // 마이페이지 응답에 필요한 사용자 정보를 조회

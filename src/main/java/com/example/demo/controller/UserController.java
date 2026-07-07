@@ -1,5 +1,6 @@
 package com.example.demo.controller;
 
+import com.example.demo.dto.LoginResponse;
 import com.example.demo.dto.UserLoginRequest;
 import com.example.demo.dto.UserResponse;
 import com.example.demo.dto.UserSignupRequest;
@@ -36,9 +37,7 @@ public class UserController {
 
     // 이메일과 비밀번호로 사용자를 확인하는 로그인 API
     @PostMapping("/login")
-    public ResponseEntity<UserResponse> login(@Valid @RequestBody UserLoginRequest request) {
-
-        System.out.println("test");
+    public ResponseEntity<LoginResponse> login(@Valid @RequestBody UserLoginRequest request) {
 
         return ResponseEntity.ok(userService.login(request));
     }

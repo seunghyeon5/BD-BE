@@ -78,7 +78,8 @@ public class SecurityConfig {
                 .addFilterBefore(new JWTFilter(jwtUtil, userRepository), UsernamePasswordAuthenticationFilter.class)
 
                 // 로그인 필터 추가 (JWTFilter 실행 후 JWT 발급 처리)
-                .addFilterAfter(new LoginFilter(authenticationManager(), jwtUtil), JWTFilter.class)
+                // 로그인 요청을 LoginFilter가 가로채지 않고 UserController.login에서 처리하도록 주석 처리
+                //.addFilterAfter(new LoginFilter(authenticationManager(), jwtUtil), JWTFilter.class)
 
                 // 세션을 사용하지 않음 (JWT 기반 인증이므로 STATELESS 모드 설정)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
