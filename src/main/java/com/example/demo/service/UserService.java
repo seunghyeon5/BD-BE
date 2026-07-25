@@ -1,6 +1,7 @@
 package com.example.demo.service;
 
 import com.example.demo.dto.LoginResponse;
+import com.example.demo.dto.UserDuplicateCheckResponse;
 import com.example.demo.dto.UserLoginRequest;
 import com.example.demo.dto.UserResponse;
 import com.example.demo.dto.UserSignupRequest;
@@ -23,9 +24,8 @@ public class UserService {
 
     // 이메일 중복을 확인한 뒤 새 사용자를 저장
     public UserResponse signup(UserSignupRequest request) {
-        if (userRepository.existsByEmail(request.getEmail())) {
-            throw new ApiException(HttpStatus.CONFLICT, "이미 가입된 이메일입니다.");
-        }
+        validateEmailAvailable(request.getEmail());
+        validateNicknameAvailable(request.getNickname());
 
         UserEntity user = UserEntity.create(
                 request.getEmail(),
@@ -36,6 +36,24 @@ public class UserService {
         );
 
         return UserResponse.from(userRepository.save(user));
+    }
+
+    // 이메일 중복 확인
+    public UserDuplicateCheckResponse checkEmailDuplicate(String email) {
+        return UserDuplicateCheckResponse.builder()
+                .field("email")
+                .value(email)
+                .available(!userRepository.existsByEmail(email))
+                .build();
+    }
+
+    // 닉네임 중복 확인
+    public UserDuplicateCheckResponse checkNicknameDuplicate(String nickname) {
+        return UserDuplicateCheckResponse.builder()
+                .field("nickname")
+                .value(nickname)
+                .available(!userRepository.existsByNickname(nickname))
+                .build();
     }
 
     // 입력받은 이메일과 비밀번호가 저장된 사용자 정보와 일치하는지 확인
@@ -83,5 +101,17 @@ public class UserService {
         user.withdraw();
 
         return UserResponse.from(user);
+    }
+
+    private void validateEmailAvailable(String email) {
+        if (userRepository.existsByEmail(email)) {
+            throw new ApiException(HttpStatus.CONFLICT, "이미 가입된 이메일입니다.");
+        }
+    }
+
+    private void validateNicknameAvailable(String nickname) {
+        if (userRepository.existsByNickname(nickname)) {
+            throw new ApiException(HttpStatus.CONFLICT, "이미 사용 중인 닉네임입니다.");
+        }
     }
 }

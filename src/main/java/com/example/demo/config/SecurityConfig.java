@@ -70,7 +70,13 @@ public class SecurityConfig {
 
                 // 엔드포인트별 접근 권한 설정
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/", "/api/users/signup", "/api/users/login").permitAll() // 로그인, 회원가입, 홈은 누구나 접근 가능
+                        .requestMatchers(
+                                "/",
+                                "/api/users/signup",
+                                "/api/users/login",
+                                "/api/users/exist-email",
+                                "/api/users/exist-nickname"
+                        ).permitAll() // 로그인, 회원가입, 중복확인, 홈은 누구나 접근 가능
                         .requestMatchers("/admin").hasAuthority("ROLE_ADMIN") //admin 경로는 admin 권한 필요하도록 설정
                         .anyRequest().authenticated()) // 그 외의 요청은 인증된 사용자만 접근 가능함
 

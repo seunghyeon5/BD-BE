@@ -27,9 +27,9 @@ public class DiaryService {
     public DiaryCreateResponse create(DiaryCreateRequest request) {
         UserEntity user = userService.findUser(request.getUserId());
 
-        if (diaryRepository.existsByUserIdAndDiaryDate(request.getUserId(), request.getDiaryDate())) {
-            throw new ApiException(HttpStatus.CONFLICT, "해당 날짜에는 이미 일기를 작성했습니다.");
-        }
+//        if (diaryRepository.existsByUserIdAndDiaryDate(request.getUserId(), request.getDiaryDate())) {
+//            throw new ApiException(HttpStatus.CONFLICT, "해당 날짜에는 이미 일기를 작성했습니다.");
+//        }
 
         DiaryEntity diary = DiaryEntity.create(
                 user,

@@ -1,6 +1,7 @@
 package com.example.demo.controller;
 
 import com.example.demo.dto.LoginResponse;
+import com.example.demo.dto.UserDuplicateCheckResponse;
 import com.example.demo.dto.UserLoginRequest;
 import com.example.demo.dto.UserResponse;
 import com.example.demo.dto.UserSignupRequest;
@@ -8,10 +9,13 @@ import com.example.demo.exception.ApiException;
 import com.example.demo.security.CustomUserDetails;
 import com.example.demo.service.UserService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
@@ -20,6 +24,7 @@ import java.net.URI;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/users")
+@Validated
 public class UserController {
     private final UserService userService;
 
@@ -40,6 +45,22 @@ public class UserController {
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody UserLoginRequest request) {
 
         return ResponseEntity.ok(userService.login(request));
+    }
+
+    // 이메일 중복 여부를 확인 API
+    @GetMapping("/exist-email")
+    public ResponseEntity<UserDuplicateCheckResponse> checkEmailDuplicate(
+            @Email @NotBlank @RequestParam String email
+    ) {
+        return ResponseEntity.ok(userService.checkEmailDuplicate(email));
+    }
+
+    // 닉네임 중복 여부를 확인 API
+    @GetMapping("/exist-nickname")
+    public ResponseEntity<UserDuplicateCheckResponse> checkNicknameDuplicate(
+            @NotBlank @RequestParam String nickname
+    ) {
+        return ResponseEntity.ok(userService.checkNicknameDuplicate(nickname));
     }
 
     // 마이페이지에서 사용할 내 정보 조회 API
