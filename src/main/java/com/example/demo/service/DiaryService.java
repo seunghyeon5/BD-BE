@@ -1,9 +1,9 @@
 package com.example.demo.service;
 
-import com.example.demo.dto.DiaryCreateRequest;
-import com.example.demo.dto.DiaryCreateResponse;
-import com.example.demo.dto.DiaryExchangeResponse;
-import com.example.demo.dto.DiaryResponse;
+import com.example.demo.dto.request.DiaryCreateRequest;
+import com.example.demo.dto.response.DiaryCreateResponse;
+import com.example.demo.dto.response.DiaryExchangeResponse;
+import com.example.demo.dto.response.DiaryResponse;
 import com.example.demo.entity.DiaryEntity;
 import com.example.demo.entity.UserEntity;
 import com.example.demo.exception.ApiException;

@@ -1,10 +1,10 @@
 package com.example.demo.service;
 
-import com.example.demo.dto.LoginResponse;
-import com.example.demo.dto.UserDuplicateCheckResponse;
-import com.example.demo.dto.UserLoginRequest;
-import com.example.demo.dto.UserResponse;
-import com.example.demo.dto.UserSignupRequest;
+import com.example.demo.dto.request.UserLoginRequest;
+import com.example.demo.dto.request.UserSignupRequest;
+import com.example.demo.dto.response.LoginResponse;
+import com.example.demo.dto.response.UserDuplicateCheckResponse;
+import com.example.demo.dto.response.UserResponse;
 import com.example.demo.entity.UserEntity;
 import com.example.demo.exception.ApiException;
 import com.example.demo.jwt.JWTUtil;

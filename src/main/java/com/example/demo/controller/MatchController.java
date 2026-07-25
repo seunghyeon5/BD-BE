@@ -1,7 +1,7 @@
 package com.example.demo.controller;
 
-import com.example.demo.dto.DiaryExchangeResponse;
-import com.example.demo.dto.MatchCreateRequest;
+import com.example.demo.dto.request.MatchCreateRequest;
+import com.example.demo.dto.response.DiaryExchangeResponse;
 import com.example.demo.service.DiaryExchangeService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

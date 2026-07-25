@@ -1,8 +1,8 @@
 package com.example.demo.controller;
 
-import com.example.demo.dto.BoardCreateRequest;
-import com.example.demo.dto.BoardResponse;
-import com.example.demo.dto.BoardUpdateRequest;
+import com.example.demo.dto.request.BoardCreateRequest;
+import com.example.demo.dto.request.BoardUpdateRequest;
+import com.example.demo.dto.response.BoardResponse;
 import com.example.demo.service.BoardService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

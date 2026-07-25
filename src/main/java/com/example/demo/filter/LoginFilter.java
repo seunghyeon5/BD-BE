@@ -1,6 +1,6 @@
 package com.example.demo.filter;
 
-import com.example.demo.dto.UserLoginRequest;
+import com.example.demo.dto.request.UserLoginRequest;
 import com.example.demo.jwt.JWTUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;

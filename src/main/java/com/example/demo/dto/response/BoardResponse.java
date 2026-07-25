@@ -1,4 +1,4 @@
-package com.example.demo.dto;
+package com.example.demo.dto.response;
 
 import com.example.demo.entity.BoardEntity;
 import lombok.Builder;

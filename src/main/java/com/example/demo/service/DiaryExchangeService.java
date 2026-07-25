@@ -1,6 +1,6 @@
 package com.example.demo.service;
 
-import com.example.demo.dto.DiaryExchangeResponse;
+import com.example.demo.dto.response.DiaryExchangeResponse;
 import com.example.demo.entity.DiaryEntity;
 import com.example.demo.entity.DiaryExchangeEntity;
 import com.example.demo.exception.ApiException;
