@@ -40,6 +40,10 @@ public class DiaryEntity extends BaseTimeEntity {
     @Column(length = 30)
     private String mood;
 
+    // 일기 삭제 시 실제 데이터를 지우지 않고 삭제 여부를 표시하기 위한 컬럼
+    @Column(name = "DEL_YN", nullable = false, length = 1, columnDefinition = "CHAR(1) DEFAULT 'N'")
+    private String delYn;
+
     // 일기 등록 시 DiaryEntity를 만들기 위한 생성 메서드
     public static DiaryEntity create(UserEntity user, LocalDate diaryDate ,String title, String content, String mood) {
         DiaryEntity diary = new DiaryEntity();
@@ -48,6 +52,19 @@ public class DiaryEntity extends BaseTimeEntity {
         diary.title = title;
         diary.content = content;
         diary.mood = mood;
+        diary.delYn = "N";
         return diary;
+    }
+
+    // 수정 허용 항목만 변경
+    public void update(String title, String content, String mood) {
+        this.title = title;
+        this.content = content;
+        this.mood = mood;
+    }
+
+    // 일기 삭제 시 실제 삭제 대신 삭제 상태로 변경
+    public void delete() {
+        this.delYn = "Y";
     }
 }

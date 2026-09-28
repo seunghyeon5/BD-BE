@@ -22,7 +22,7 @@ public class DiaryExchangeService {
     // 사용자가 요청한 일기를 기준으로 매칭을 시도하고, 이미 매칭되어 있으면 기존 교환 정보를 반환
     @Transactional
     public DiaryExchangeResponse matchDiary(Long userId, Long diaryId) {
-        DiaryEntity myDiary = diaryRepository.findByIdAndUserId(diaryId, userId)
+        DiaryEntity myDiary = diaryRepository.findByIdAndUserIdAndDelYn(diaryId, userId, "N")
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "일기를 찾을 수 없습니다."));
 
         return diaryExchangeRepository.findByOwnerUserIdAndMyDiaryIdAndActiveTrue(userId, diaryId)
@@ -32,6 +32,8 @@ public class DiaryExchangeService {
 
     // 내 일기와 연결된 활성 교환 정보를 조회
     public DiaryExchangeResponse findExchange(Long userId, Long diaryId) {
+        diaryRepository.findByIdAndUserIdAndDelYn(diaryId, userId, "N")
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "일기를 찾을 수 없습니다."));
         DiaryExchangeEntity exchange = diaryExchangeRepository.findByOwnerUserIdAndMyDiaryIdAndActiveTrue(userId, diaryId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "교환된 일기가 없습니다."));
         return DiaryExchangeResponse.from(exchange);
@@ -51,6 +53,12 @@ public class DiaryExchangeService {
         DiaryExchangeEntity exchange = diaryExchangeRepository.findByIdAndOwnerUserId(exchangeId, userId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "연결을 찾을 수 없습니다."));
         exchange.deactivate();
+    }
+
+    @Transactional
+    // 일기가 삭제되면 양쪽 사용자에게 만들어진 교환 연결도 함께 비활성화
+    public void deactivateByDiaryId(Long diaryId) {
+        diaryExchangeRepository.deactivateByDiaryId(diaryId);
     }
 
     // 같은 날짜에 아직 교환되지 않은 다른 사용자의 일기를 찾아 양쪽 사용자에게 교환 정보를 생성

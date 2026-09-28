@@ -1,6 +1,7 @@
 package com.example.demo.controller;
 
 import com.example.demo.dto.request.DiaryCreateRequest;
+import com.example.demo.dto.request.DiaryUpdateRequest;
 import com.example.demo.dto.response.DiaryCreateResponse;
 import com.example.demo.dto.response.DiaryExchangeResponse;
 import com.example.demo.dto.response.DiaryResponse;
@@ -46,5 +47,25 @@ public class DiaryController {
     @GetMapping("/users/{userId}/history")
     public ResponseEntity<List<DiaryResponse>> findHistory(@PathVariable Long userId) {
         return ResponseEntity.ok(diaryService.findHistory(userId));
+    }
+
+    // 내가 작성한 일기의 제목, 내용, 기분을 수정하는 API
+    @PutMapping("/{diaryId}")
+    public ResponseEntity<DiaryResponse> update(
+            @PathVariable Long diaryId,
+            @RequestParam Long userId,
+            @Valid @RequestBody DiaryUpdateRequest request
+    ) {
+        return ResponseEntity.ok(diaryService.update(userId, diaryId, request));
+    }
+
+    // 일기 삭제 시 실제 삭제 대신 삭제 여부를 Y로 변경하는 API
+    @DeleteMapping("/{diaryId}")
+    public ResponseEntity<Void> delete(
+            @PathVariable Long diaryId,
+            @RequestParam Long userId
+    ) {
+        diaryService.delete(userId, diaryId);
+        return ResponseEntity.noContent().build();
     }
 }

@@ -10,17 +10,18 @@ import java.util.List;
 import java.util.Optional;
 
 public interface DiaryRepository extends JpaRepository<DiaryEntity, Long> {
-    boolean existsByUserIdAndDiaryDate(Long userId, LocalDate diaryDate);
+    boolean existsByUserIdAndDiaryDateAndDelYn(Long userId, LocalDate diaryDate, String delYn);
 
-    Optional<DiaryEntity> findByIdAndUserId(Long id, Long userId);
+    Optional<DiaryEntity> findByIdAndUserIdAndDelYn(Long id, Long userId, String delYn);
 
-    List<DiaryEntity> findAllByUserIdOrderByDiaryDateDescCreatedAtDesc(Long userId);
+    List<DiaryEntity> findAllByUserIdAndDelYnOrderByDiaryDateDescCreatedAtDesc(Long userId, String delYn);
 
     @Query("""
             select d
             from DiaryEntity d
             where d.diaryDate = :diaryDate
               and d.user.id <> :userId
+              and d.delYn = 'N'
               and not exists (
                   select e.id
                   from DiaryExchangeEntity e
