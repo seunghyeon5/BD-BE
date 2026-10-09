@@ -8,8 +8,5 @@ import lombok.Setter;
 @Setter
 public class MatchCreateRequest {
     @NotNull
-    private Long userId;
-
-    @NotNull
     private Long diaryId;
 }

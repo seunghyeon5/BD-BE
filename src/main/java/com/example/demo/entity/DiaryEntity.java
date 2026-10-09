@@ -10,15 +10,10 @@ import java.time.LocalDate;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Table(
-        name = "diaries",
-        uniqueConstraints = @UniqueConstraint(
-                name = "uk_diary_user_date",
-                columnNames = {"user_id", "diary_date"}
-        )
-)
+@Table(name = "diaries")
 public class DiaryEntity extends BaseTimeEntity {
     // 사용자가 하루에 하나씩 작성하는 일기 정보
+    // 삭제된 일기는 같은 날짜에 다시 작성할 수 있도록 활성 일기 여부를 서비스에서 확인
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

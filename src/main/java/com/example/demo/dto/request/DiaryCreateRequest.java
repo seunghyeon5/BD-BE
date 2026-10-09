@@ -11,9 +11,6 @@ import java.time.LocalDate;
 @Setter
 public class DiaryCreateRequest {
     @NotNull
-    private Long userId;
-
-    @NotNull
     private LocalDate diaryDate;
 
     @NotBlank

@@ -28,11 +28,11 @@ public class DiaryService {
 
     // 일기를 저장하고, 같은 날짜에 교환 가능한 상대 일기가 있으면 교환 정보를 생성
     @Transactional
-    public DiaryCreateResponse create(DiaryCreateRequest request) {
-        UserEntity user = userService.findUser(request.getUserId());
+    public DiaryCreateResponse create(Long userId, DiaryCreateRequest request) {
+        UserEntity user = userService.findUser(userId);
 
         LocalDate diaryDate = request.getDiaryDate() != null ? request.getDiaryDate() : LocalDate.now();
-        if (diaryRepository.existsByUserIdAndDiaryDateAndDelYn(request.getUserId(), diaryDate, NOT_DELETED)) {
+        if (diaryRepository.existsByUserIdAndDiaryDateAndDelYn(userId, diaryDate, NOT_DELETED)) {
             throw new ApiException(HttpStatus.CONFLICT, "해당 날짜에는 이미 일기를 작성했습니다.");
         }
 
