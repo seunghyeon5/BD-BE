@@ -20,15 +20,6 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(exception.getStatus(), exception.getMessage(), request.getRequestURI());
     }
 
-    // 존재하지 않는 게시글 조회/수정/삭제 요청 처리
-    @ExceptionHandler(BoardNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleBoardNotFound(
-            BoardNotFoundException exception,
-            HttpServletRequest request
-    ) {
-        return buildErrorResponse(HttpStatus.NOT_FOUND, exception.getMessage(), request.getRequestURI());
-    }
-
     // 수정 비밀번호가 맞지 않을 때 처리
     @ExceptionHandler(InvalidBoardPasswordException.class)
     public ResponseEntity<ErrorResponse> handleInvalidBoardPassword(

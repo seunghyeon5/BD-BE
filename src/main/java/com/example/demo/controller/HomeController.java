@@ -10,8 +10,8 @@ public class HomeController {
     @GetMapping("/")
     public Map<String, String> index() {
         return Map.of(
-                "message", "Board REST API server is running.",
-                "boards", "/api/boards"
+                "message", "Diary REST API server is running.",
+                "diaries", "/api/diaries"
         );
     }
 }
