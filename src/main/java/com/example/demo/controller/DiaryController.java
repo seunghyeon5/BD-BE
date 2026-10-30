@@ -10,11 +10,13 @@ import com.example.demo.service.DiaryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.data.domain.Page;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -49,10 +51,29 @@ public class DiaryController {
 
     // 사용자가 과거에 작성한 일기 목록을 최신순으로 조회하는 API
     @GetMapping("/history")
-    public ResponseEntity<List<DiaryResponse>> findHistory(
-            @AuthenticationPrincipal CustomUserDetails loginUser
+    public ResponseEntity<Page<DiaryResponse>> findHistory(
+            @AuthenticationPrincipal CustomUserDetails loginUser,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) LocalDate fromDate,
+            @RequestParam(required = false) LocalDate toDate,
+            @RequestParam(required = false) String mood
     ) {
-        return ResponseEntity.ok(diaryService.findHistory(loginUser.getUserId()));
+        return ResponseEntity.ok(diaryService.findHistory(loginUser.getUserId(), page, size, fromDate, toDate, mood));
+    }
+
+    // 내가 작성한 삭제되지 않은 일기 한 건을 조회하는 API
+    @GetMapping("/{diaryId}")
+    public ResponseEntity<DiaryResponse> findById(@PathVariable Long diaryId,
+            @AuthenticationPrincipal CustomUserDetails loginUser) {
+        return ResponseEntity.ok(diaryService.findById(loginUser.getUserId(), diaryId));
+    }
+
+    // 삭제한 일기를 같은 날짜에 새 일기가 없을 때 복구하는 API
+    @PatchMapping("/{diaryId}/restore")
+    public ResponseEntity<DiaryResponse> restore(@PathVariable Long diaryId,
+            @AuthenticationPrincipal CustomUserDetails loginUser) {
+        return ResponseEntity.ok(diaryService.restore(loginUser.getUserId(), diaryId));
     }
 
     // 내가 작성한 일기의 제목, 내용, 기분을 수정하는 API

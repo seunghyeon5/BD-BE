@@ -61,6 +61,11 @@ public class UserService {
         UserEntity user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다."));
 
+        // 탈퇴한 계정은 다시 로그인할 수 없도록 처리
+        if ("Y".equals(user.getDelYn())) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "탈퇴한 사용자입니다.");
+        }
+
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다.");
         }

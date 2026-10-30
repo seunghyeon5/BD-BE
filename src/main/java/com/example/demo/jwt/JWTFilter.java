@@ -63,6 +63,12 @@ public class JWTFilter extends OncePerRequestFilter {
             UserEntity userEntity = userRepository.findByEmail(email)
                     .orElseThrow(() -> new UsernameNotFoundException("존재하지 않는 유저입니다: " + email));
 
+            // 탈퇴한 회원은 기존 토큰을 가지고 있어도 인증되지 않도록 처리
+            if ("Y".equals(userEntity.getDelYn())) {
+                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "탈퇴한 사용자입니다.");
+                return;
+            }
+
             // CustomUserDetails에 엔티티를 담아서 생성
             CustomUserDetails userDetails = new CustomUserDetails(userEntity);
             System.out.println("====== [유저 인증 정보 확인] ======");

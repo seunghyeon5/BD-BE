@@ -6,6 +6,12 @@ import com.example.demo.entity.DiaryExchangeEntity;
 import com.example.demo.exception.ApiException;
 import com.example.demo.repository.DiaryExchangeRepository;
 import com.example.demo.repository.DiaryRepository;
+import com.example.demo.repository.BlockedUserRepository;
+import com.example.demo.entity.BlockedUserEntity;
+import com.example.demo.repository.UserRepository;
+import com.example.demo.entity.MatchNotificationEntity;
+import com.example.demo.repository.MatchNotificationRepository;
+import com.example.demo.dto.response.MatchNotificationResponse;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -18,6 +24,50 @@ import java.util.List;
 public class DiaryExchangeService {
     private final DiaryRepository diaryRepository;
     private final DiaryExchangeRepository diaryExchangeRepository;
+    private final BlockedUserRepository blockedUserRepository;
+    private final UserRepository userRepository;
+    private final MatchNotificationRepository matchNotificationRepository;
+
+    // 읽지 않은 교환 알림 목록을 조회
+    public List<MatchNotificationResponse> findNotifications(Long userId) {
+        return matchNotificationRepository.findAllByUserIdAndReadYnFalseOrderByCreatedAtDesc(userId)
+                .stream().map(MatchNotificationResponse::from).toList();
+    }
+
+    @Transactional
+    // 본인의 교환 알림을 읽음 상태로 변경
+    public void readNotification(Long userId, Long notificationId) {
+        MatchNotificationEntity notification = matchNotificationRepository.findByIdAndUserId(notificationId, userId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "알림을 찾을 수 없습니다."));
+        notification.markRead();
+    }
+
+    // 교환하고 싶지 않은 사용자를 차단하고 현재 연결도 종료
+    @Transactional
+    public void blockUser(Long userId, Long blockedUserId) {
+        if (userId.equals(blockedUserId)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "본인은 차단할 수 없습니다.");
+        }
+        if (!blockedUserRepository.existsByOwnerUserIdAndBlockedUserId(userId, blockedUserId)) {
+            var owner = userRepository.findById(userId).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."));
+            var blocked = userRepository.findById(blockedUserId).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."));
+            blockedUserRepository.save(BlockedUserEntity.create(owner, blocked));
+        }
+        diaryExchangeRepository.deactivateByUsers(userId, blockedUserId);
+    }
+
+    // 차단한 상대를 다시 교환 후보에 포함
+    @Transactional
+    public void unblockUser(Long userId, Long blockedUserId) {
+        blockedUserRepository.findByOwnerUserIdAndBlockedUserId(userId, blockedUserId)
+                .ifPresent(blockedUserRepository::delete);
+    }
+
+    // 내가 차단한 사용자 ID 목록 조회
+    public List<Long> findBlockedUsers(Long userId) {
+        return blockedUserRepository.findAllByOwnerUserId(userId).stream()
+                .map(block -> block.getBlockedUser().getId()).toList();
+    }
 
     // 사용자가 요청한 일기를 기준으로 매칭을 시도하고, 이미 매칭되어 있으면 기존 교환 정보를 반환
     @Transactional
@@ -52,7 +102,7 @@ public class DiaryExchangeService {
     public void disconnect(Long userId, Long exchangeId) {
         DiaryExchangeEntity exchange = diaryExchangeRepository.findByIdAndOwnerUserId(exchangeId, userId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "연결을 찾을 수 없습니다."));
-        exchange.deactivate();
+        diaryExchangeRepository.deactivatePair(exchange.getMyDiary().getId(), exchange.getPartnerDiary().getId());
     }
 
     @Transactional
@@ -99,6 +149,9 @@ public class DiaryExchangeService {
         );
 
         diaryExchangeRepository.save(partnerExchange);
-        return DiaryExchangeResponse.from(diaryExchangeRepository.save(myExchange));
+        diaryExchangeRepository.save(myExchange);
+        matchNotificationRepository.save(MatchNotificationEntity.create(myDiary.getUser(), myExchange));
+        matchNotificationRepository.save(MatchNotificationEntity.create(partnerDiary.getUser(), partnerExchange));
+        return DiaryExchangeResponse.from(myExchange);
     }
 }

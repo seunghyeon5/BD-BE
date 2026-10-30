@@ -14,6 +14,7 @@ public class DiaryExchangeResponse {
     private DiaryResponse myDiary;
     private DiaryResponse partnerDiary;
     private boolean active;
+    private String status;
 
     public static DiaryExchangeResponse from(DiaryExchangeEntity exchange) {
         return DiaryExchangeResponse.builder()
@@ -22,6 +23,7 @@ public class DiaryExchangeResponse {
                 .myDiary(DiaryResponse.from(exchange.getMyDiary()))
                 .partnerDiary(DiaryResponse.from(exchange.getPartnerDiary()))
                 .active(exchange.isActive())
+                .status(exchange.isActive() ? "ACTIVE" : "DISCONNECTED")
                 .build();
     }
 }

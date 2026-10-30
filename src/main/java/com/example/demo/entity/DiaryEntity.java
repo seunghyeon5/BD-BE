@@ -62,4 +62,9 @@ public class DiaryEntity extends BaseTimeEntity {
     public void delete() {
         this.delYn = "Y";
     }
+
+    // 삭제한 일기를 다시 사용하도록 복구
+    public void restore() {
+        this.delYn = "N";
+    }
 }

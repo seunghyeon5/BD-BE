@@ -12,7 +12,6 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
@@ -34,8 +33,8 @@ public class UserController {
         UserResponse response = userService.signup(request);
         URI location = ServletUriComponentsBuilder
                 .fromCurrentContextPath()
-                .path("/api/users/{userId}/me")
-                .buildAndExpand(response.getId())
+                .path("/api/users/me")
+                .build()
                 .toUri();
         return ResponseEntity.created(location).body(response);
     }
@@ -64,20 +63,14 @@ public class UserController {
     }
 
     // 마이페이지에서 사용할 내 정보 조회 API
-    @GetMapping("/{id}/me")
-    public ResponseEntity<UserResponse> myPage(@PathVariable Long id) {
-        return ResponseEntity.ok(userService.findMyPage(id));
+    @GetMapping("/me")
+    public ResponseEntity<UserResponse> myPage(@AuthenticationPrincipal CustomUserDetails loginUser) {
+        return ResponseEntity.ok(userService.findMyPage(loginUser.getUserId()));
     }
 
     //사용자 회원탈퇴 API
-    @PostMapping("/{id}/me/withdraw")
-    public ResponseEntity<UserResponse> delete(@PathVariable Long id, @AuthenticationPrincipal CustomUserDetails loginUser) {
-
-        System.out.println("데이터 : " + loginUser.getUserId());
-        if (!loginUser.getUserId().equals(id)) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "본인의 계정만 탈퇴할 수 있습니다.");
-        }
-
-        return ResponseEntity.ok(userService.withdrawUser(id));
+    @PostMapping("/me/withdraw")
+    public ResponseEntity<UserResponse> delete(@AuthenticationPrincipal CustomUserDetails loginUser) {
+        return ResponseEntity.ok(userService.withdrawUser(loginUser.getUserId()));
     }
 }
