@@ -18,7 +18,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -29,7 +28,7 @@ public class DiaryService {
 
     private static final String NOT_DELETED = "N";
 
-    // 일기를 저장하고, 같은 날짜에 교환 가능한 상대 일기가 있으면 교환 정보를 생성
+    // 일기를 저장하고 답장을 받을 상대가 있으면 바로 교환 요청을 생성
     @Transactional
     public DiaryCreateResponse create(Long userId, DiaryCreateRequest request) {
         UserEntity user = userService.findUser(userId);

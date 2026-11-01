@@ -1,157 +1,212 @@
 package com.example.demo.service;
 
+import com.example.demo.dto.request.DiaryCreateRequest;
 import com.example.demo.dto.response.DiaryExchangeResponse;
-import com.example.demo.entity.DiaryEntity;
-import com.example.demo.entity.DiaryExchangeEntity;
+import com.example.demo.entity.*;
 import com.example.demo.exception.ApiException;
-import com.example.demo.repository.DiaryExchangeRepository;
-import com.example.demo.repository.DiaryRepository;
-import com.example.demo.repository.BlockedUserRepository;
-import com.example.demo.entity.BlockedUserEntity;
-import com.example.demo.repository.UserRepository;
-import com.example.demo.entity.MatchNotificationEntity;
-import com.example.demo.repository.MatchNotificationRepository;
-import com.example.demo.dto.response.MatchNotificationResponse;
+import com.example.demo.repository.*;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class DiaryExchangeService {
+    private static final int MAX_PENDING_RECEIVED = 1;
+    private final DiaryExchangeRequestRepository exchangeRepository;
     private final DiaryRepository diaryRepository;
-    private final DiaryExchangeRepository diaryExchangeRepository;
-    private final BlockedUserRepository blockedUserRepository;
     private final UserRepository userRepository;
-    private final MatchNotificationRepository matchNotificationRepository;
+    private final BlockedUserRepository blockedUserRepository;
 
-    // 읽지 않은 교환 알림 목록을 조회
-    public List<MatchNotificationResponse> findNotifications(Long userId) {
-        return matchNotificationRepository.findAllByUserIdAndReadYnFalseOrderByCreatedAtDesc(userId)
-                .stream().map(MatchNotificationResponse::from).toList();
-    }
-
+    // 발신 일기를 랜덤한 상대에게 전달하고 24시간 답장 기한을 부여
     @Transactional
-    // 본인의 교환 알림을 읽음 상태로 변경
-    public void readNotification(Long userId, Long notificationId) {
-        MatchNotificationEntity notification = matchNotificationRepository.findByIdAndUserId(notificationId, userId)
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "알림을 찾을 수 없습니다."));
-        notification.markRead();
+    public DiaryExchangeResponse createExchangeIfPossible(DiaryEntity diary) {
+        // 같은 작성자의 동시 재매칭 요청이 여러 상대에게 전달되지 않도록 잠금
+        userRepository.findForUpdate(diary.getUser().getId())
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."));
+        if (exchangeRepository.existsBySenderDiaryIdAndStatus(diary.getId(), ExchangeStatus.PENDING)
+                || exchangeRepository.existsBySenderDiaryIdAndStatus(diary.getId(), ExchangeStatus.COMPLETED)
+                || exchangeRepository.existsByReplyDiaryIdAndStatus(diary.getId(), ExchangeStatus.COMPLETED)) {
+            throw new ApiException(HttpStatus.CONFLICT, "이미 교환 중인 일기입니다.");
+        }
+        List<Long> previouslyReceived = exchangeRepository.findAllBySenderDiaryIdAndStatus(diary.getId(), ExchangeStatus.REJECTED)
+                .stream().map(e -> e.getRecipientUser().getId()).toList();
+        List<Long> expiredRecipients = exchangeRepository.findAllBySenderDiaryIdAndStatus(diary.getId(), ExchangeStatus.EXPIRED)
+                .stream().map(e -> e.getRecipientUser().getId()).toList();
+        List<UserEntity> candidates = userRepository.findAllByDelYn("N").stream()
+                .filter(user -> !user.getId().equals(diary.getUser().getId()))
+                .filter(user -> !previouslyReceived.contains(user.getId()) && !expiredRecipients.contains(user.getId()))
+                .filter(user -> !blockedUserRepository.existsByOwnerUserIdAndBlockedUserId(diary.getUser().getId(), user.getId()))
+                .filter(user -> !blockedUserRepository.existsByOwnerUserIdAndBlockedUserId(user.getId(), diary.getUser().getId()))
+                .toList();
+        candidates = new java.util.ArrayList<>(candidates);
+        Collections.shuffle(candidates);
+        for (UserEntity candidate : candidates) {
+            UserEntity locked = userRepository.findForUpdate(candidate.getId()).orElseThrow();
+            if ("Y".equals(locked.getDelYn())) continue;
+            if (exchangeRepository.countByRecipientUserIdAndStatusAndExpiresAtAfter(
+                    locked.getId(), ExchangeStatus.PENDING, LocalDateTime.now()) >= MAX_PENDING_RECEIVED) continue;
+            DiaryExchangeRequestEntity request = exchangeRepository.save(DiaryExchangeRequestEntity.create(
+                    diary.getUser(), locked, diary, LocalDateTime.now().plusHours(24)));
+            return DiaryExchangeResponse.from(request, diary.getUser().getId());
+        }
+        return null;
     }
 
-    // 교환하고 싶지 않은 사용자를 차단하고 현재 연결도 종료
+    // 교환할 상대가 없었거나 이전 요청이 끝난 일기를 다시 전달
+    @Transactional
+    public DiaryExchangeResponse matchDiary(Long userId, Long diaryId) {
+        DiaryEntity diary = diaryRepository.findByIdAndUserIdAndDelYn(diaryId, userId, "N")
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "일기를 찾을 수 없습니다."));
+        expireDueRequests();
+        return createExchangeIfPossible(diary);
+    }
+
+    // 받은 요청은 발신자의 일기를 읽을 수 있고, 완료 후에는 양쪽 일기를 조회
+    @Transactional
+    public DiaryExchangeResponse findExchange(Long userId, Long diaryId) {
+        return exchangeRepository.findAllBySenderUserIdOrRecipientUserIdOrderByIdDesc(userId, userId).stream()
+                .filter(e -> e.getSenderDiary().getId().equals(diaryId)
+                        || (e.getReplyDiary() != null && e.getReplyDiary().getId().equals(diaryId)))
+                .findFirst().map(e -> {
+                    expireIfDue(e);
+                    return DiaryExchangeResponse.from(e, userId);
+                }).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "교환 요청을 찾을 수 없습니다."));
+    }
+
+    // 내가 보낸 요청과 받은 요청을 최신순으로 조회
+    @Transactional
+    public List<DiaryExchangeResponse> findActiveConnections(Long userId) {
+        return exchangeRepository.findAllBySenderUserIdOrRecipientUserIdOrderByIdDesc(userId, userId).stream()
+                .peek(this::expireIfDue).map(e -> DiaryExchangeResponse.from(e, userId)).toList();
+    }
+
+    // 수신자가 답장 일기를 작성하면 서로의 일기를 볼 수 있도록 완료 처리
+    @Transactional
+    public DiaryExchangeResponse reply(Long userId, Long exchangeId, DiaryCreateRequest body) {
+        DiaryExchangeRequestEntity request = exchangeRepository.findForUpdate(exchangeId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "교환 요청을 찾을 수 없습니다."));
+        requireRecipient(request, userId);
+        expireIfDue(request);
+        if (request.getStatus() != ExchangeStatus.PENDING) {
+            throw new ApiException(HttpStatus.CONFLICT, "답장할 수 없는 교환 요청입니다.");
+        }
+        if ("Y".equals(request.getSenderDiary().getDelYn()) || "Y".equals(request.getSenderUser().getDelYn())) {
+            request.cancel();
+            throw new ApiException(HttpStatus.CONFLICT, "작성자의 일기를 확인할 수 없습니다.");
+        }
+        if (diaryRepository.existsByUserIdAndDiaryDateAndDelYn(userId, body.getDiaryDate(), "N")) {
+            throw new ApiException(HttpStatus.CONFLICT, "해당 날짜에는 이미 일기를 작성했습니다.");
+        }
+        DiaryEntity reply = diaryRepository.save(DiaryEntity.create(request.getRecipientUser(), body.getDiaryDate(),
+                body.getTitle(), body.getContent(), body.getMood()));
+        request.complete(reply);
+        return DiaryExchangeResponse.from(request, userId);
+    }
+
+    // 수신자가 원하지 않는 요청을 거절
+    @Transactional
+    public DiaryExchangeResponse reject(Long userId, Long exchangeId) {
+        DiaryExchangeRequestEntity request = exchangeRepository.findForUpdate(exchangeId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "교환 요청을 찾을 수 없습니다."));
+        requireRecipient(request, userId);
+        expireIfDue(request);
+        if (request.getStatus() != ExchangeStatus.PENDING) {
+            throw new ApiException(HttpStatus.CONFLICT, "거절할 수 없는 교환 요청입니다.");
+        }
+        request.reject();
+        return DiaryExchangeResponse.from(request, userId);
+    }
+
+    // 받은 요청 중 답장할 수 있는 요청을 조회
+    @Transactional
+    public List<DiaryExchangeResponse> findInbox(Long userId) {
+        return exchangeRepository.findAllByRecipientUserIdAndStatusOrderByIdDesc(userId, ExchangeStatus.PENDING).stream()
+                .peek(this::expireIfDue)
+                .peek(e -> {
+                    if (e.getStatus() == ExchangeStatus.PENDING &&
+                            ("Y".equals(e.getSenderUser().getDelYn()) || "Y".equals(e.getSenderDiary().getDelYn()))) {
+                        e.cancel();
+                    }
+                })
+                .filter(e -> e.getStatus() == ExchangeStatus.PENDING)
+                .map(e -> DiaryExchangeResponse.from(e, userId)).toList();
+    }
+
+    // 연결 종료 시 완료된 교환은 기록으로 두고 대기 중인 요청만 취소
+    @Transactional
+    public void disconnect(Long userId, Long exchangeId) {
+        DiaryExchangeRequestEntity request = exchangeRepository.findForUpdate(exchangeId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "교환 요청을 찾을 수 없습니다."));
+        if (!request.getSenderUser().getId().equals(userId) && !request.getRecipientUser().getId().equals(userId)) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "교환 요청을 찾을 수 없습니다.");
+        }
+        expireIfDue(request);
+        if (request.getStatus() != ExchangeStatus.PENDING) {
+            throw new ApiException(HttpStatus.CONFLICT, "종료할 수 없는 교환 요청입니다.");
+        }
+        request.cancel();
+    }
+
+    // 일기가 삭제되면 해당 일기와 연결된 교환 요청도 취소
+    @Transactional
+    public void deactivateByDiaryId(Long diaryId) {
+        exchangeRepository.findAllBySenderDiaryIdOrReplyDiaryId(diaryId, diaryId).stream()
+                .forEach(DiaryExchangeRequestEntity::cancel);
+    }
+
+    // 답장 기한이 지난 요청을 주기적으로 만료 처리
+    @Scheduled(fixedDelay = 60000) // 스케쥴링으로 1분 간격으로 기한이 지난 pending 요청을 확인
+    @Transactional
+    public void expireDueRequests() {
+        exchangeRepository.findAllByStatusAndExpiresAtLessThanEqual(ExchangeStatus.PENDING, LocalDateTime.now())
+                .forEach(DiaryExchangeRequestEntity::expire);
+    }
+
+    private void expireIfDue(DiaryExchangeRequestEntity request) {
+        if (request.getStatus() == ExchangeStatus.PENDING && !LocalDateTime.now().isBefore(request.getExpiresAt())) {
+            request.expire();
+        }
+    }
+
+    private void requireRecipient(DiaryExchangeRequestEntity request, Long userId) {
+        if (!request.getRecipientUser().getId().equals(userId)) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "교환 요청을 찾을 수 없습니다.");
+        }
+    }
+
+    // 차단한 상대와의 대기 요청을 취소하고 다음 교환 후보에서 제외
     @Transactional
     public void blockUser(Long userId, Long blockedUserId) {
-        if (userId.equals(blockedUserId)) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "본인은 차단할 수 없습니다.");
-        }
+        if (userId.equals(blockedUserId)) throw new ApiException(HttpStatus.BAD_REQUEST, "본인은 차단할 수 없습니다.");
+        UserEntity owner = userRepository.findById(userId).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."));
+        UserEntity blocked = userRepository.findById(blockedUserId).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."));
         if (!blockedUserRepository.existsByOwnerUserIdAndBlockedUserId(userId, blockedUserId)) {
-            var owner = userRepository.findById(userId).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."));
-            var blocked = userRepository.findById(blockedUserId).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."));
             blockedUserRepository.save(BlockedUserEntity.create(owner, blocked));
         }
-        diaryExchangeRepository.deactivateByUsers(userId, blockedUserId);
+        exchangeRepository.findAllBySenderUserIdOrRecipientUserIdOrderByIdDesc(userId, userId).stream()
+                .filter(e -> e.getStatus() == ExchangeStatus.PENDING)
+                .filter(e -> e.getSenderUser().getId().equals(blockedUserId)
+                        || e.getRecipientUser().getId().equals(blockedUserId))
+                .forEach(DiaryExchangeRequestEntity::cancel);
     }
 
-    // 차단한 상대를 다시 교환 후보에 포함
     @Transactional
+    // 차단한 상대를 다시 후보에 포함
     public void unblockUser(Long userId, Long blockedUserId) {
         blockedUserRepository.findByOwnerUserIdAndBlockedUserId(userId, blockedUserId)
                 .ifPresent(blockedUserRepository::delete);
     }
 
-    // 내가 차단한 사용자 ID 목록 조회
+    // 내가 차단한 사용자 목록 조회
     public List<Long> findBlockedUsers(Long userId) {
         return blockedUserRepository.findAllByOwnerUserId(userId).stream()
                 .map(block -> block.getBlockedUser().getId()).toList();
-    }
-
-    // 사용자가 요청한 일기를 기준으로 매칭을 시도하고, 이미 매칭되어 있으면 기존 교환 정보를 반환
-    @Transactional
-    public DiaryExchangeResponse matchDiary(Long userId, Long diaryId) {
-        DiaryEntity myDiary = diaryRepository.findByIdAndUserIdAndDelYn(diaryId, userId, "N")
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "일기를 찾을 수 없습니다."));
-
-        return diaryExchangeRepository.findByOwnerUserIdAndMyDiaryIdAndActiveTrue(userId, diaryId)
-                .map(DiaryExchangeResponse::from)
-                .orElseGet(() -> createExchangeIfPossible(myDiary));
-    }
-
-    // 내 일기와 연결된 활성 교환 정보를 조회
-    public DiaryExchangeResponse findExchange(Long userId, Long diaryId) {
-        diaryRepository.findByIdAndUserIdAndDelYn(diaryId, userId, "N")
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "일기를 찾을 수 없습니다."));
-        DiaryExchangeEntity exchange = diaryExchangeRepository.findByOwnerUserIdAndMyDiaryIdAndActiveTrue(userId, diaryId)
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "교환된 일기가 없습니다."));
-        return DiaryExchangeResponse.from(exchange);
-    }
-
-    // 사용자가 현재 유지 중인 모든 일기 교환 연결을 조회
-    public List<DiaryExchangeResponse> findActiveConnections(Long userId) {
-        return diaryExchangeRepository.findAllByOwnerUserIdAndActiveTrueOrderByExchangeDateDescCreatedAtDesc(userId)
-                .stream()
-                .map(DiaryExchangeResponse::from)
-                .toList();
-    }
-
-    // 교환 연결을 비활성화하여 더 이상 이어지지 않도록 처리
-    @Transactional
-    public void disconnect(Long userId, Long exchangeId) {
-        DiaryExchangeEntity exchange = diaryExchangeRepository.findByIdAndOwnerUserId(exchangeId, userId)
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "연결을 찾을 수 없습니다."));
-        diaryExchangeRepository.deactivatePair(exchange.getMyDiary().getId(), exchange.getPartnerDiary().getId());
-    }
-
-    @Transactional
-    // 일기가 삭제되면 양쪽 사용자에게 만들어진 교환 연결도 함께 비활성화
-    public void deactivateByDiaryId(Long diaryId) {
-        diaryExchangeRepository.deactivateByDiaryId(diaryId);
-    }
-
-    // 같은 날짜에 아직 교환되지 않은 다른 사용자의 일기를 찾아 양쪽 사용자에게 교환 정보를 생성
-    @Transactional
-    public DiaryExchangeResponse createExchangeIfPossible(DiaryEntity myDiary) {
-        if (diaryExchangeRepository.existsByMyDiaryIdAndActiveTrue(myDiary.getId())) {
-            return diaryExchangeRepository.findByOwnerUserIdAndMyDiaryIdAndActiveTrue(
-                            myDiary.getUser().getId(),
-                            myDiary.getId()
-                    )
-                    .map(DiaryExchangeResponse::from)
-                    .orElse(null);
-        }
-
-        List<DiaryEntity> candidates = diaryRepository.findMatchCandidates(
-                myDiary.getUser().getId(),
-                myDiary.getDiaryDate()
-        );
-
-        if (candidates.isEmpty()) {
-            return null;
-        }
-
-        DiaryEntity partnerDiary = candidates.get(0);
-        DiaryExchangeEntity myExchange = DiaryExchangeEntity.create(
-                myDiary.getUser(),
-                partnerDiary.getUser(),
-                myDiary,
-                partnerDiary,
-                myDiary.getDiaryDate()
-        );
-        DiaryExchangeEntity partnerExchange = DiaryExchangeEntity.create(
-                partnerDiary.getUser(),
-                myDiary.getUser(),
-                partnerDiary,
-                myDiary,
-                myDiary.getDiaryDate()
-        );
-
-        diaryExchangeRepository.save(partnerExchange);
-        diaryExchangeRepository.save(myExchange);
-        matchNotificationRepository.save(MatchNotificationEntity.create(myDiary.getUser(), myExchange));
-        matchNotificationRepository.save(MatchNotificationEntity.create(partnerDiary.getUser(), partnerExchange));
-        return DiaryExchangeResponse.from(myExchange);
     }
 }

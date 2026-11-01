@@ -17,7 +17,6 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
 import java.time.LocalDate;
-import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
@@ -25,7 +24,7 @@ import java.util.List;
 public class DiaryController {
     private final DiaryService diaryService;
 
-    // 오늘의 일기를 저장하고, 교환 가능한 상대가 있으면 바로 매칭까지 시도하는 API
+    // 오늘의 일기를 저장하고 전달 가능한 랜덤한 상대에게 보내는 API
     @PostMapping
     public ResponseEntity<DiaryCreateResponse> create(
             @Valid @RequestBody DiaryCreateRequest request,
@@ -34,13 +33,13 @@ public class DiaryController {
         DiaryCreateResponse response = diaryService.create(loginUser.getUserId(), request);
         URI location = ServletUriComponentsBuilder
                 .fromCurrentRequest()
-                .path("/{diaryId}/exchange")
+                .path("/{diaryId}")
                 .buildAndExpand(response.getDiary().getId())
                 .toUri();
         return ResponseEntity.created(location).body(response);
     }
 
-    // 내가 쓴 일기와 교환된 상대방의 일기를 함께 조회하는 API
+    // 내가 쓴 일기의 교환 상태와 답장 일기를 조회하는 API
     @GetMapping("/{diaryId}/exchange")
     public ResponseEntity<DiaryExchangeResponse> findExchangedDiary(
             @PathVariable Long diaryId,

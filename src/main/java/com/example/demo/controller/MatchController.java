@@ -2,7 +2,7 @@ package com.example.demo.controller;
 
 import com.example.demo.dto.request.MatchCreateRequest;
 import com.example.demo.dto.response.DiaryExchangeResponse;
-import com.example.demo.dto.response.MatchNotificationResponse;
+import com.example.demo.dto.request.DiaryCreateRequest;
 import com.example.demo.security.CustomUserDetails;
 import com.example.demo.service.DiaryExchangeService;
 import jakarta.validation.Valid;
@@ -19,21 +19,28 @@ import java.util.List;
 public class MatchController {
     private final DiaryExchangeService diaryExchangeService;
 
-    // 읽지 않은 교환 알림 목록을 조회하는 API
-    @GetMapping("/notifications")
-    public ResponseEntity<List<MatchNotificationResponse>> notifications(@AuthenticationPrincipal CustomUserDetails loginUser) {
-        return ResponseEntity.ok(diaryExchangeService.findNotifications(loginUser.getUserId()));
+    // 나에게 도착해 답장을 기다리는 일기 목록을 조회하는 API
+    @GetMapping("/inbox")
+    public ResponseEntity<List<DiaryExchangeResponse>> inbox(@AuthenticationPrincipal CustomUserDetails loginUser) {
+        return ResponseEntity.ok(diaryExchangeService.findInbox(loginUser.getUserId()));
     }
 
-    // 교환 알림을 읽음 상태로 변경하는 API
-    @PatchMapping("/notifications/{notificationId}/read")
-    public ResponseEntity<Void> readNotification(@PathVariable Long notificationId,
+    // 받은 일기에 답장 일기를 작성해 교환을 완료하는 API
+    @PostMapping("/{exchangeId}/reply")
+    public ResponseEntity<DiaryExchangeResponse> reply(@PathVariable Long exchangeId,
+            @Valid @RequestBody DiaryCreateRequest request,
             @AuthenticationPrincipal CustomUserDetails loginUser) {
-        diaryExchangeService.readNotification(loginUser.getUserId(), notificationId);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok(diaryExchangeService.reply(loginUser.getUserId(), exchangeId, request));
     }
 
-    // 특정 일기에 대해 교환 가능한 상대 일기를 찾아 매칭하는 API
+    // 받은 일기 교환 요청을 거절하는 API
+    @PostMapping("/{exchangeId}/reject")
+    public ResponseEntity<DiaryExchangeResponse> reject(@PathVariable Long exchangeId,
+            @AuthenticationPrincipal CustomUserDetails loginUser) {
+        return ResponseEntity.ok(diaryExchangeService.reject(loginUser.getUserId(), exchangeId));
+    }
+
+    // 상대가 없었거나 답장이 오지 않은 내 일기를 다시 전달하는 API
     @PostMapping
     public ResponseEntity<DiaryExchangeResponse> match(
             @Valid @RequestBody MatchCreateRequest request,
@@ -42,7 +49,7 @@ public class MatchController {
         return ResponseEntity.ok(diaryExchangeService.matchDiary(loginUser.getUserId(), request.getDiaryId()));
     }
 
-    // 현재 유지 중인 일기 교환 연결 목록을 조회하는 API
+    // 내가 보냈거나 받은 교환 요청의 상태를 조회하는 API
     @GetMapping
     public ResponseEntity<List<DiaryExchangeResponse>> findConnections(
             @AuthenticationPrincipal CustomUserDetails loginUser
