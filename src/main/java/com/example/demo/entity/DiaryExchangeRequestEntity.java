@@ -6,6 +6,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Getter
@@ -32,6 +34,14 @@ public class DiaryExchangeRequestEntity extends BaseTimeEntity {
     @JoinColumn(name = "reply_diary_id")
     private DiaryEntity replyDiary;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "next_reply_user_id")
+    private UserEntity nextReplyUser;
+
+    @OneToMany(mappedBy = "exchange")
+    @OrderBy("id ASC")
+    private List<DiaryExchangeMessageEntity> messages = new ArrayList<>();
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private ExchangeStatus status;
@@ -48,13 +58,34 @@ public class DiaryExchangeRequestEntity extends BaseTimeEntity {
         exchange.senderDiary = senderDiary;
         exchange.expiresAt = expiresAt;
         exchange.status = ExchangeStatus.PENDING;
+        exchange.nextReplyUser = recipient;
         return exchange;
     }
 
-    // 수신자가 답장 일기를 쓰면 교환을 완료
-    public void complete(DiaryEntity replyDiary) {
-        this.replyDiary = replyDiary;
+    // 답장을 쓰면 다음 사람에게 차례를 넘기고 24시간 기한을 다시 설정
+    public void completeTurn(UserEntity nextReplyUser, LocalDateTime expiresAt) {
+        this.nextReplyUser = nextReplyUser;
+        this.expiresAt = expiresAt;
         this.status = ExchangeStatus.COMPLETED;
+    }
+
+    // 저장한 답장을 교환 기록에 추가
+    public void addMessage(DiaryExchangeMessageEntity message) {
+        this.messages.add(message);
+    }
+
+    // 이전 교환 데이터도 다음 답장 차례를 확인할 수 있도록 사용자 ID를 반환
+    public Long nextReplyUserId() {
+        if (nextReplyUser != null) return nextReplyUser.getId();
+        return status == ExchangeStatus.PENDING ? recipientUser.getId() : senderUser.getId();
+    }
+
+    // 이전 방식으로 완료된 교환은 첫 답장을 쓴 시각부터 A의 기한을 다시 계산
+    public void initializeNextTurnForLegacy() {
+        if (status == ExchangeStatus.COMPLETED && nextReplyUser == null && replyDiary != null) {
+            nextReplyUser = senderUser;
+            if (getUpdatedAt() != null) expiresAt = getUpdatedAt().plusHours(24);
+        }
     }
 
     // 수신자가 교환을 원하지 않으면 요청을 거절

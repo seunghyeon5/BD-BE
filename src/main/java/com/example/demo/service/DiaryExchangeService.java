@@ -19,11 +19,13 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class DiaryExchangeService {
-    private static final int MAX_PENDING_RECEIVED = 1;
+    private static final int MAX_WAITING_FOR_REPLY = 1;
     private final DiaryExchangeRequestRepository exchangeRepository;
     private final DiaryRepository diaryRepository;
     private final UserRepository userRepository;
     private final BlockedUserRepository blockedUserRepository;
+    private final DiaryExchangeMessageRepository messageRepository;
+    private static final List<ExchangeStatus> WAITING_STATUSES = List.of(ExchangeStatus.PENDING, ExchangeStatus.COMPLETED);
 
     // 발신 일기를 랜덤한 상대에게 전달하고 24시간 답장 기한을 부여
     @Transactional
@@ -51,8 +53,8 @@ public class DiaryExchangeService {
         for (UserEntity candidate : candidates) {
             UserEntity locked = userRepository.findForUpdate(candidate.getId()).orElseThrow();
             if ("Y".equals(locked.getDelYn())) continue;
-            if (exchangeRepository.countByRecipientUserIdAndStatusAndExpiresAtAfter(
-                    locked.getId(), ExchangeStatus.PENDING, LocalDateTime.now()) >= MAX_PENDING_RECEIVED) continue;
+            if (exchangeRepository.countWaitingForUser(
+                    locked.getId(), WAITING_STATUSES, LocalDateTime.now()) >= MAX_WAITING_FOR_REPLY) continue;
             DiaryExchangeRequestEntity request = exchangeRepository.save(DiaryExchangeRequestEntity.create(
                     diary.getUser(), locked, diary, LocalDateTime.now().plusHours(24)));
             return DiaryExchangeResponse.from(request, diary.getUser().getId());
@@ -88,26 +90,30 @@ public class DiaryExchangeService {
                 .peek(this::expireIfDue).map(e -> DiaryExchangeResponse.from(e, userId)).toList();
     }
 
-    // 수신자가 답장 일기를 작성하면 서로의 일기를 볼 수 있도록 완료 처리
+    // 현재 답장 차례의 사용자가 일기를 쓰면 상대에게 차례를 넘기고 기한을 연장
     @Transactional
     public DiaryExchangeResponse reply(Long userId, Long exchangeId, DiaryCreateRequest body) {
         DiaryExchangeRequestEntity request = exchangeRepository.findForUpdate(exchangeId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "교환 요청을 찾을 수 없습니다."));
-        requireRecipient(request, userId);
+        requireTurnOwner(request, userId);
         expireIfDue(request);
-        if (request.getStatus() != ExchangeStatus.PENDING) {
+        if (!isWaiting(request)) {
             throw new ApiException(HttpStatus.CONFLICT, "답장할 수 없는 교환 요청입니다.");
         }
-        if ("Y".equals(request.getSenderDiary().getDelYn()) || "Y".equals(request.getSenderUser().getDelYn())) {
+        if ("Y".equals(request.getSenderDiary().getDelYn()) || "Y".equals(request.getSenderUser().getDelYn())
+                || "Y".equals(request.getRecipientUser().getDelYn())) {
             request.cancel();
             throw new ApiException(HttpStatus.CONFLICT, "작성자의 일기를 확인할 수 없습니다.");
         }
-        if (diaryRepository.existsByUserIdAndDiaryDateAndDelYn(userId, body.getDiaryDate(), "N")) {
-            throw new ApiException(HttpStatus.CONFLICT, "해당 날짜에는 이미 일기를 작성했습니다.");
-        }
-        DiaryEntity reply = diaryRepository.save(DiaryEntity.create(request.getRecipientUser(), body.getDiaryDate(),
-                body.getTitle(), body.getContent(), body.getMood()));
-        request.complete(reply);
+        UserEntity author = request.getSenderUser().getId().equals(userId)
+                ? request.getSenderUser() : request.getRecipientUser();
+        UserEntity next = request.getSenderUser().getId().equals(userId)
+                ? request.getRecipientUser() : request.getSenderUser();
+        DiaryExchangeMessageEntity message = DiaryExchangeMessageEntity.create(
+                request, author, body.getDiaryDate(), body.getTitle(), body.getContent(), body.getMood());
+        request.addMessage(message);
+        messageRepository.save(message);
+        request.completeTurn(next, LocalDateTime.now().plusHours(24));
         return DiaryExchangeResponse.from(request, userId);
     }
 
@@ -116,31 +122,32 @@ public class DiaryExchangeService {
     public DiaryExchangeResponse reject(Long userId, Long exchangeId) {
         DiaryExchangeRequestEntity request = exchangeRepository.findForUpdate(exchangeId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "교환 요청을 찾을 수 없습니다."));
-        requireRecipient(request, userId);
+        requireTurnOwner(request, userId);
         expireIfDue(request);
-        if (request.getStatus() != ExchangeStatus.PENDING) {
+        if (!isWaiting(request)) {
             throw new ApiException(HttpStatus.CONFLICT, "거절할 수 없는 교환 요청입니다.");
         }
         request.reject();
         return DiaryExchangeResponse.from(request, userId);
     }
 
-    // 받은 요청 중 답장할 수 있는 요청을 조회
+    // 내 답장 차례가 된 교환 요청을 조회
     @Transactional
     public List<DiaryExchangeResponse> findInbox(Long userId) {
-        return exchangeRepository.findAllByRecipientUserIdAndStatusOrderByIdDesc(userId, ExchangeStatus.PENDING).stream()
+        return exchangeRepository.findAllBySenderUserIdOrRecipientUserIdOrderByIdDesc(userId, userId).stream()
                 .peek(this::expireIfDue)
                 .peek(e -> {
-                    if (e.getStatus() == ExchangeStatus.PENDING &&
+                    if (isWaiting(e) &&
                             ("Y".equals(e.getSenderUser().getDelYn()) || "Y".equals(e.getSenderDiary().getDelYn()))) {
                         e.cancel();
                     }
                 })
-                .filter(e -> e.getStatus() == ExchangeStatus.PENDING)
+                .filter(this::isWaiting)
+                .filter(e -> e.nextReplyUserId().equals(userId))
                 .map(e -> DiaryExchangeResponse.from(e, userId)).toList();
     }
 
-    // 연결 종료 시 완료된 교환은 기록으로 두고 대기 중인 요청만 취소
+    // 교환 중인 연결을 종료하면 더 이상 답장을 주고받지 않도록 취소
     @Transactional
     public void disconnect(Long userId, Long exchangeId) {
         DiaryExchangeRequestEntity request = exchangeRepository.findForUpdate(exchangeId)
@@ -149,7 +156,7 @@ public class DiaryExchangeService {
             throw new ApiException(HttpStatus.NOT_FOUND, "교환 요청을 찾을 수 없습니다.");
         }
         expireIfDue(request);
-        if (request.getStatus() != ExchangeStatus.PENDING) {
+        if (!isWaiting(request)) {
             throw new ApiException(HttpStatus.CONFLICT, "종료할 수 없는 교환 요청입니다.");
         }
         request.cancel();
@@ -162,22 +169,27 @@ public class DiaryExchangeService {
                 .forEach(DiaryExchangeRequestEntity::cancel);
     }
 
-    // 답장 기한이 지난 요청을 주기적으로 만료 처리
-    @Scheduled(fixedDelay = 60000) // 스케쥴링으로 1분 간격으로 기한이 지난 pending 요청을 확인
+    // 답장 차례인 사람이 24시간 안에 답하지 않으면 교환을 만료 처리
+    @Scheduled(fixedDelay = 60000) // 1분 간격으로 답장을 기다리는 요청의 기한을 확인
     @Transactional
     public void expireDueRequests() {
-        exchangeRepository.findAllByStatusAndExpiresAtLessThanEqual(ExchangeStatus.PENDING, LocalDateTime.now())
-                .forEach(DiaryExchangeRequestEntity::expire);
+        exchangeRepository.findAllByStatusInAndExpiresAtLessThanEqual(WAITING_STATUSES, LocalDateTime.now())
+                .forEach(this::expireIfDue);
     }
 
     private void expireIfDue(DiaryExchangeRequestEntity request) {
-        if (request.getStatus() == ExchangeStatus.PENDING && !LocalDateTime.now().isBefore(request.getExpiresAt())) {
+        request.initializeNextTurnForLegacy();
+        if (isWaiting(request) && !LocalDateTime.now().isBefore(request.getExpiresAt())) {
             request.expire();
         }
     }
 
-    private void requireRecipient(DiaryExchangeRequestEntity request, Long userId) {
-        if (!request.getRecipientUser().getId().equals(userId)) {
+    private boolean isWaiting(DiaryExchangeRequestEntity request) {
+        return request.getStatus() == ExchangeStatus.PENDING || request.getStatus() == ExchangeStatus.COMPLETED;
+    }
+
+    private void requireTurnOwner(DiaryExchangeRequestEntity request, Long userId) {
+        if (!request.nextReplyUserId().equals(userId)) {
             throw new ApiException(HttpStatus.NOT_FOUND, "교환 요청을 찾을 수 없습니다.");
         }
     }
@@ -192,7 +204,7 @@ public class DiaryExchangeService {
             blockedUserRepository.save(BlockedUserEntity.create(owner, blocked));
         }
         exchangeRepository.findAllBySenderUserIdOrRecipientUserIdOrderByIdDesc(userId, userId).stream()
-                .filter(e -> e.getStatus() == ExchangeStatus.PENDING)
+                .filter(this::isWaiting)
                 .filter(e -> e.getSenderUser().getId().equals(blockedUserId)
                         || e.getRecipientUser().getId().equals(blockedUserId))
                 .forEach(DiaryExchangeRequestEntity::cancel);

@@ -29,23 +29,4 @@ public interface DiaryRepository extends JpaRepository<DiaryEntity, Long> {
     Page<DiaryEntity> findHistory(@Param("userId") Long userId, @Param("fromDate") LocalDate fromDate,
                                   @Param("toDate") LocalDate toDate, @Param("mood") String mood, Pageable pageable);
 
-    @Query("""
-            select d
-            from DiaryEntity d
-            where d.diaryDate = :diaryDate
-              and d.user.id <> :userId
-              and d.delYn = 'N'
-              and d.user.delYn = 'N'
-              and not exists (select b.id from BlockedUserEntity b
-                  where (b.ownerUser.id = :userId and b.blockedUser = d.user)
-                     or (b.blockedUser.id = :userId and b.ownerUser = d.user))
-              and not exists (
-                  select e.id
-                  from DiaryExchangeEntity e
-                  where e.active = true
-                    and (e.myDiary = d or e.partnerDiary = d)
-              )
-            order by d.createdAt asc
-            """)
-    List<DiaryEntity> findMatchCandidates(@Param("userId") Long userId, @Param("diaryDate") LocalDate diaryDate);
 }

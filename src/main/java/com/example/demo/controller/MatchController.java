@@ -20,13 +20,13 @@ import java.util.List;
 public class MatchController {
     private final DiaryExchangeService diaryExchangeService;
 
-    // 나에게 도착해 답장을 기다리는 일기 목록을 조회하는 API
+    // 처음 받은 일기와 내가 답장할 차례가 된 교환 목록을 조회하는 API
     @GetMapping("/inbox")
     public ResponseEntity<List<DiaryExchangeResponse>> inbox(@AuthenticationPrincipal CustomUserDetails loginUser) {
         return ResponseEntity.ok(diaryExchangeService.findInbox(loginUser.getUserId()));
     }
 
-    // 받은 일기에 답장 일기를 작성해 교환을 완료하는 API
+    // 내 차례의 일기에 답장하고 상대에게 다음 24시간 기한을 주는 API
     @PostMapping("/{exchangeId}/reply")
     public ResponseEntity<DiaryExchangeResponse> reply(@PathVariable Long exchangeId,
             @Valid @RequestBody DiaryCreateRequest request,
