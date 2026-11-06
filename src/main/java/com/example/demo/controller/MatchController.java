@@ -2,6 +2,7 @@ package com.example.demo.controller;
 
 import com.example.demo.dto.request.MatchCreateRequest;
 import com.example.demo.dto.response.DiaryExchangeResponse;
+import com.example.demo.dto.response.BlockedUserResponse;
 import com.example.demo.dto.request.DiaryCreateRequest;
 import com.example.demo.security.CustomUserDetails;
 import com.example.demo.service.DiaryExchangeService;
@@ -75,7 +76,7 @@ public class MatchController {
         return ResponseEntity.noContent().build();
     }
 
-    // 차단한 상대를 다시 허용하는 API
+    // 차단 목록에서 선택한 사용자의 차단을 해제하는 API
     @DeleteMapping("/blocks/{blockedUserId}")
     public ResponseEntity<Void> unblock(@PathVariable Long blockedUserId,
             @AuthenticationPrincipal CustomUserDetails loginUser) {
@@ -83,9 +84,9 @@ public class MatchController {
         return ResponseEntity.noContent().build();
     }
 
-    // 내가 차단한 사용자 목록을 조회하는 API
+    // 내가 차단한 사용자 목록을 ID와 닉네임으로 조회하는 API
     @GetMapping("/blocks")
-    public ResponseEntity<List<Long>> blocks(@AuthenticationPrincipal CustomUserDetails loginUser) {
+    public ResponseEntity<List<BlockedUserResponse>> blocks(@AuthenticationPrincipal CustomUserDetails loginUser) {
         return ResponseEntity.ok(diaryExchangeService.findBlockedUsers(loginUser.getUserId()));
     }
 }

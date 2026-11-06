@@ -2,6 +2,7 @@ package com.example.demo.service;
 
 import com.example.demo.dto.request.DiaryCreateRequest;
 import com.example.demo.dto.response.DiaryExchangeResponse;
+import com.example.demo.dto.response.BlockedUserResponse;
 import com.example.demo.entity.*;
 import com.example.demo.exception.ApiException;
 import com.example.demo.repository.*;
@@ -198,15 +199,15 @@ public class DiaryExchangeService {
     }
 
     @Transactional
-    // 차단한 상대를 다시 후보에 포함
+    // 차단 해제
     public void unblockUser(Long userId, Long blockedUserId) {
         blockedUserRepository.findByOwnerUserIdAndBlockedUserId(userId, blockedUserId)
                 .ifPresent(blockedUserRepository::delete);
     }
 
-    // 내가 차단한 사용자 목록 조회
-    public List<Long> findBlockedUsers(Long userId) {
-        return blockedUserRepository.findAllByOwnerUserId(userId).stream()
-                .map(block -> block.getBlockedUser().getId()).toList();
+    // 내가 차단한 사용자를 최신순으로 조ㅎㅚ
+    public List<BlockedUserResponse> findBlockedUsers(Long userId) {
+        return blockedUserRepository.findAllByOwnerUserIdOrderByIdDesc(userId).stream()
+                .map(BlockedUserResponse::from).toList();
     }
 }
